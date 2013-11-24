@@ -1,0 +1,7 @@
+{
+  "name": "remotestorage",
+  "version": "0.8.3",
+  "main": [
+    "./remotestorage.js"
+  ]
+}
