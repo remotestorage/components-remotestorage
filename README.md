@@ -9,3 +9,4 @@ Package Managers
 ----------------
 
 * [Bower](http://bower.io): `remotestorage`
+* [NPM](https://www.npmjs.org/package/remotestoragejs): `remotestoragejs`
