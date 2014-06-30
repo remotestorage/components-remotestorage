@@ -1,4 +1,4 @@
-/** remotestorage.js 0.10.0-beta3, http://remotestorage.io, MIT-licensed **/
+/** remotestorage.js 0.10.0, http://remotestorage.io, MIT-licensed **/
 
 /** FILE: lib/promising.js **/
 (function(global) {
@@ -156,7 +156,7 @@
           promise.reject('Argument \'maxAge\' must be false or a number');
           return promise;
         }
-        return this.local.get(path, maxAge);
+        return this.local.get(path, maxAge, this.sync.queueGetRequest.bind(this.sync));
       } else {
         return this.remote.get(path);
       }
@@ -350,6 +350,19 @@
   };
 
   RemoteStorage.prototype = {
+
+    /**
+     * Method: displayWidget
+     *
+     * Displays the widget at the top right of the page. Make sure to call this function
+     * once on every pageload (after the html 'body' tag), unless you use a custom widget.
+     *
+     * Parameters:
+     *
+     *   domID: identifier of the DOM element which should embody the widget (optional)
+     */
+     // (see src/widget.js for implementation)
+
     /**
      * Method: connect
      *
@@ -501,6 +514,19 @@
       RemoteStorage.log.apply(RemoteStorage, arguments);
     },
 
+    /**
+     * Method: setApiKeys (experimental)
+     *
+     * Set API keys for (currently) GoogleDrive and/or Dropbox backend support.
+     * See also the 'backends' example in the starter-kit. Note that support for
+     * both these backends is still experimental.
+     *
+     * Parameters:
+     * type - string, either 'googledrive' or 'dropbox'
+     * keys - object, with one string field; 'client_id' for GoogleDrive, or
+     *          'api_key' for Dropbox.
+     *
+     */
     setApiKeys: function(type, keys) {
       if (keys) {
         this.apiKeys[type] = keys;
@@ -2860,7 +2886,8 @@ Math.uuid = function (len, radix) {
      *
      * (start code)
      * {
-     *    path: path, // Path of the changed node
+     *    path: path, // Absolute path of the changed node, from the storage root
+     *    relativePath: relativePath, // Path of the changed node, relative to this baseclient's scope root
      *    origin: 'window', 'local', 'remote', or 'conflict' // emitted by user action within the app, local data store, remote sync, or versioning conflicts
      *    oldValue: oldBody, // Old body of the changed node (local version in conflicts; undefined if creation)
      *    newValue: newBody, // New body of the changed node (remote version in conflicts; undefined if deletion)
@@ -2875,7 +2902,8 @@ Math.uuid = function (len, radix) {
      * 
      * (start code)
      * {
-     *    path: 'color.txt'
+     *    path: '/public/design/color.txt',
+     *    relativePath: 'color.txt',
      *    origin: 'local',
      *    oldValue: undefined,
      *    newValue: 'white',
@@ -2890,7 +2918,8 @@ Math.uuid = function (len, radix) {
      *
      * (start code)
      * {
-     *    path: 'color.txt'
+     *    path: '/public/design/color.txt',
+     *    relativePath: 'color.txt',
      *    origin: 'window',
      *    oldValue: 'white',
      *    newValue: 'blue',
@@ -2907,7 +2936,8 @@ Math.uuid = function (len, radix) {
      * 
      * (start code)
      * {
-     *    path: 'color.txt'
+     *    path: '/public/design/color.txt',
+     *    relativePath: 'color.txt',
      *    origin: 'conflict',
      *    oldValue: 'blue',
      *    newValue: 'red',
@@ -5144,14 +5174,17 @@ Math.uuid = function (len, radix) {
 
   var methods = {
 
-    get: function(path, maxAge) {
+    // TODO: improve our code structure so that this function
+    // could call sync.queueGetRequest directly instead of needing
+    // this hacky third parameter as a callback
+    get: function(path, maxAge, queueGetRequest) {
       var promise = promising();
 
       if (typeof(maxAge) === 'number') {
         this.getNodes(pathsFromRoot(path)).then(function(objs) {
           var node = getLatest(objs[path]);
           if (isOutdated(objs, maxAge)) {
-            remoteStorage.sync.queueGetRequest(path, promise);
+            queueGetRequest(path, promise);
           } else if (node) {
             promise.fulfill(200, node.body || node.itemsMap, node.contentType);
           } else {
