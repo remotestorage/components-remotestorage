@@ -347,7 +347,8 @@ define([], function() {
       window:   false,
       remote:   true,
       conflict: true
-    }
+    },
+    discoveryTimeout: 10000
   };
 
   RemoteStorage.prototype = {
@@ -389,7 +390,7 @@ define([], function() {
 
       var discoveryTimeout = setTimeout(function() {
         this._emit('error', new RemoteStorage.DiscoveryError("No storage information found at that user address."));
-      }.bind(this), 5000);
+      }.bind(this), RemoteStorage.config.discoveryTimeout);
 
       RemoteStorage.Discover(userAddress, function(href, storageApi, authURL) {
         clearTimeout(discoveryTimeout);
@@ -1073,7 +1074,7 @@ define([], function() {
   }
 
   function determineCharset(mimeType) {
-    var charset = 'utf-8';
+    var charset = 'UTF-8';
     var charsetMatch;
 
     if (mimeType) {
@@ -1082,7 +1083,6 @@ define([], function() {
         charset = charsetMatch[1];
       }
     }
-
     return charset;
   }
 
@@ -1126,8 +1126,9 @@ define([], function() {
     RS.eventHandling(this, 'change', 'connected', 'wire-busy', 'wire-done', 'not-connected');
 
     onErrorCb = function(error){
-      if (error instanceof RemoteStorage.Unauthorized ||
-          error instanceof RemoteStorage.SyncError) {
+      if (error instanceof RemoteStorage.SyncError) {
+        this.online = false;
+      } else if (error instanceof RemoteStorage.Unauthorized) {
         this.configure(undefined, undefined, undefined, null);
       }
     }.bind(this);
@@ -1370,8 +1371,8 @@ define([], function() {
         throw new Error("not connected (path: " + path + ")");
       }
       if (!options) { options = {}; }
-      if (!contentType.match(/charset=/)) {
-        contentType += '; charset=' + ((body instanceof ArrayBuffer || isArrayBufferView(body)) ? 'binary' : 'utf-8');
+      if ((!contentType.match(/charset=/)) && (body instanceof ArrayBuffer || isArrayBufferView(body))) {
+        contentType +=  '; charset=binary';
       }
       var headers = { 'Content-Type': contentType };
       if (this.supportsRevs) {
@@ -1506,15 +1507,15 @@ define([], function() {
   /**
    * Class: RemoteStorage.Discover
    *
-   * This class deals with the webfinger lookup
+   * This class deals with the Webfinger lookup, discovering a connecting
+   * user's storage details.
+   *
+   * The discovery timeout can be configured via
+   * `RemoteStorage.config.discoveryTimeout` (in ms).
    *
    * Arguments:
-   * userAddress - user@host
-   * callback    - gets called with href of the storage, the type and the authURL
-   * Example:
-   * (start code)
-   *
-   * (end code)
+   *   userAddress - user@host
+   *   callback    - gets called with href of the storage, the type and the authURL
    **/
 
   RemoteStorage.Discover = function(userAddress, callback) {
@@ -1527,9 +1528,7 @@ define([], function() {
     var params = '?resource=' + encodeURIComponent('acct:' + userAddress);
     var urls = [
       'https://' + hostname + '/.well-known/webfinger' + params,
-      'https://' + hostname + '/.well-known/host-meta.json' + params,
-      'http://' + hostname + '/.well-known/webfinger' + params,
-      'http://' + hostname + '/.well-known/host-meta.json' + params
+      'http://' + hostname + '/.well-known/webfinger' + params
     ];
 
     function tryOne() {
@@ -2083,9 +2082,9 @@ RemoteStorage.Assets = {
       this.rs.remote.on('wire-done', function(evt) {
         if (flashFor(evt)) {
           requestsToFlashFor--;
-          if (requestsToFlashFor <= 0) {
-            stateSetter(self, 'connected')();
-          }
+        }
+        if (requestsToFlashFor <= 0 && evt.success) {
+          stateSetter(self, 'connected')();
         }
       });
     }
@@ -3864,6 +3863,10 @@ Math.uuid = function (len, radix) {
      *   maxAge requirement cannot be met because of network problems, this
      *   promise will be rejected. If the maxAge requirement is set to false,
      *   the promise will always be fulfilled with data from the local store.
+     *
+     *   For items that are not JSON-stringified objects (e.g. stored using
+     *   `storeFile` instead of `storeObject`), the object's value is filled in
+     *   with `true`.
      *
      * Example:
      *   (start code)
@@ -5659,8 +5662,8 @@ Math.uuid = function (len, radix) {
         promise.fulfill(412, undefined, undefined, savedRev);
         return promise;
       }
-      if (! contentType.match(/charset=/)) {
-        contentType += '; charset=' + ((body instanceof ArrayBuffer || RS.WireClient.isArrayBufferView(body)) ? 'binary' : 'utf-8');
+      if ((! contentType.match(/charset=/)) && (body instanceof ArrayBuffer || RS.WireClient.isArrayBufferView(body))) {
+        contentType += '; charset=binary';
       }
       var url = 'https://api-content.dropbox.com/1/files_put/auto' + path + '?';
       if (options && options.ifMatch) {
