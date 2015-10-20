@@ -1,5 +1,8 @@
-remoteStorage.js
-================
+# DEPRECATED
+
+This repo is deprecated in favor of using the [main repo](https://github.com/remotestorage/remotestorage.js) for all package managers.
+
+---
 
 Shim repository for [remoteStorage.js](https://github.com/remotestorage/remotestorage.js).
 
